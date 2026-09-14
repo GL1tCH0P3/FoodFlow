@@ -1,9 +1,11 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
 cd /d "%~dp0.."
 
 set "ROOT=%CD%"
+set "TOOLS_DIR=%ROOT%\.tools"
+set "LOCAL_VCPKG=%TOOLS_DIR%\vcpkg"
 
 echo.
 echo ========================================
@@ -11,18 +13,44 @@ echo          FOODFLOW - SETUP
 echo ========================================
 echo.
 
-REM ------------------------------------------------------------
-REM 1. Localizar vcpkg
-REM ------------------------------------------------------------
+REM ============================================================
+REM 1. Verificar Git
+REM ============================================================
 
-echo [1/4] Buscando vcpkg...
+echo [1/6] Verificando Git...
 
+where git.exe >nul 2>&1
+
+if errorlevel 1 (
+    echo.
+    echo ERROR: Git no esta instalado o no esta disponible en PATH.
+    echo Instale Git y vuelva a ejecutar este archivo.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo       Git encontrado.
+
+
+REM ============================================================
+REM 2. Buscar vcpkg existente
+REM ============================================================
+
+echo.
+echo [2/6] Buscando vcpkg...
+
+set "VCPKG_EXE="
+
+REM Primero: variable de entorno existente
 if defined VCPKG_ROOT (
     if exist "%VCPKG_ROOT%\vcpkg.exe" (
-        goto VCPKG_FOUND
+        set "VCPKG_EXE=%VCPKG_ROOT%\vcpkg.exe"
+        goto VCPKG_READY
     )
 )
 
+REM Segundo: vcpkg incluido con Visual Studio / Build Tools
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 
 if exist "%VSWHERE%" (
@@ -34,73 +62,113 @@ if exist "%VSWHERE%" (
     )
 
     if defined VS_PATH (
-        if exist "%VS_PATH%\VC\vcpkg\vcpkg.exe" (
-            set "VCPKG_ROOT=%VS_PATH%\VC\vcpkg"
-            goto VCPKG_FOUND
+        if exist "!VS_PATH!\VC\vcpkg\vcpkg.exe" (
+            set "VCPKG_ROOT=!VS_PATH!\VC\vcpkg"
+            set "VCPKG_EXE=!VCPKG_ROOT!\vcpkg.exe"
+            goto VCPKG_READY
         )
     )
 )
 
-echo.
-echo ERROR: No se encontro vcpkg.
-echo Instale Visual Studio Build Tools con C++ y vcpkg.
-echo.
-pause
-exit /b 1
+REM Tercero: vcpkg local del proyecto
+if exist "%LOCAL_VCPKG%\vcpkg.exe" (
+    set "VCPKG_ROOT=%LOCAL_VCPKG%"
+    set "VCPKG_EXE=%LOCAL_VCPKG%\vcpkg.exe"
+    goto VCPKG_READY
+)
 
 
-:VCPKG_FOUND
+REM ============================================================
+REM 3. Descargar vcpkg si no existe
+REM ============================================================
 
-echo       vcpkg encontrado:
-echo       %VCPKG_ROOT%
+echo       vcpkg no encontrado.
+echo       Instalando copia local para FoodFlow...
 
+if not exist "%TOOLS_DIR%" (
+    mkdir "%TOOLS_DIR%"
+)
 
-REM ------------------------------------------------------------
-REM 2. Restaurar dependencias
-REM ------------------------------------------------------------
-
-echo.
-echo [2/4] Restaurando dependencias...
-
-"%VCPKG_ROOT%\vcpkg.exe" install --triplet x64-windows
+git clone https://github.com/microsoft/vcpkg.git "%LOCAL_VCPKG%"
 
 if errorlevel 1 (
     echo.
-    echo ERROR: No fue posible instalar las dependencias.
-    echo.
+    echo ERROR: No fue posible descargar vcpkg.
     pause
     exit /b 1
 )
 
+call "%LOCAL_VCPKG%\bootstrap-vcpkg.bat" -disableMetrics
 
-REM ------------------------------------------------------------
-REM 3. Crear configuracion local
-REM ------------------------------------------------------------
+if errorlevel 1 (
+    echo.
+    echo ERROR: No fue posible inicializar vcpkg.
+    pause
+    exit /b 1
+)
+
+set "VCPKG_ROOT=%LOCAL_VCPKG%"
+set "VCPKG_EXE=%LOCAL_VCPKG%\vcpkg.exe"
+
+
+:VCPKG_READY
+
+echo       vcpkg listo:
+echo       %VCPKG_EXE%
+
+
+REM ============================================================
+REM 4. Restaurar dependencias del proyecto
+REM ============================================================
 
 echo.
-echo [3/4] Preparando configuracion...
+echo [3/6] Restaurando dependencias...
+
+"%VCPKG_EXE%" install --triplet x64-windows
+
+if errorlevel 1 (
+    echo.
+    echo ERROR: No fue posible restaurar las dependencias.
+    pause
+    exit /b 1
+)
+
+echo       Dependencias restauradas.
+
+
+REM ============================================================
+REM 5. Crear configuracion local
+REM ============================================================
+
+echo.
+echo [4/6] Preparando configuracion...
 
 if not exist "%ROOT%\config\database.env" (
 
-    copy ^
+    if not exist "%ROOT%\config\database.env.example" (
+        echo.
+        echo ERROR: No existe config\database.env.example
+        pause
+        exit /b 1
+    )
+
+    copy /Y ^
         "%ROOT%\config\database.env.example" ^
         "%ROOT%\config\database.env" >nul
 
-    echo.
-    echo Se creo:
-    echo config\database.env
-    echo.
-    echo IMPORTANTE:
-    echo Complete ese archivo con las credenciales de FoodFlow.
+    echo       Se creo config\database.env
+    echo       Debe completar las credenciales de PostgreSQL.
+) else (
+    echo       database.env ya existe.
 )
 
-REM ------------------------------------------------------------
-REM 4. Compilar
-REM ------------------------------------------------------------
+
+REM ============================================================
+REM 6. Compilar
+REM ============================================================
 
 echo.
-echo [4/4] Compilando FoodFlow...
-echo.
+echo [5/6] Compilando FoodFlow...
 
 call "%ROOT%\scripts\build.bat"
 
@@ -111,14 +179,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
+
+REM ============================================================
+REM Resultado
+REM ============================================================
+
+echo.
+echo [6/6] Setup finalizado.
+
 echo.
 echo ========================================
-echo       SETUP COMPLETADO
+echo       FOODFLOW LISTO
 echo ========================================
 echo.
-echo Siguiente paso:
+echo Para continuar:
 echo.
-echo   1. Complete config\database.env
-echo   2. Ejecute run.bat
+echo   1. Abra config\database.env
+echo   2. Complete las credenciales entregadas
+echo   3. Ejecute run.bat
 echo.
 pause
+
+exit /b 0
