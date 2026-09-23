@@ -1,4 +1,5 @@
 #include "repositorios/ProductoRepositorio.hpp"
+#include "utilidades/utilidades.hpp"
 
 namespace foodflow {
 
@@ -6,7 +7,7 @@ ProductoRepositorio::ProductoRepositorio(ConexionPostgres& conexion)
     : db(conexion) {
 }
 
-std::vector<Producto> ProductoRepositorio::obtenerDisponibles(std::int64_t restauranteId) {
+std::vector<std::unique_ptr<Producto>> ProductoRepositorio::obtenerDisponibles(std::int64_t restauranteId) {
     pqxx::read_transaction transaccion{
         db.obtener()
     };
@@ -19,7 +20,10 @@ std::vector<Producto> ProductoRepositorio::obtenerDisponibles(std::int64_t resta
                 nombre,
                 descripcion,
                 precio,
-                disponible
+                disponible,
+                tipo,
+                recargo,
+                recargo_especial
             FROM foodflow.producto
             WHERE restaurante_id = $1
                 AND disponible = TRUE
@@ -28,25 +32,11 @@ std::vector<Producto> ProductoRepositorio::obtenerDisponibles(std::int64_t resta
         restauranteId
     );
 
-    std::vector<Producto> productos;
+    std::vector<std::unique_ptr<Producto>> productos;
 
     for (const auto& fila : resultado) {
 
-        Producto producto;
-
-        producto.id = fila["id"].as<std::int64_t>();
-
-        producto.restauranteId = fila["restaurante_id"].as<std::int64_t>();
-
-        producto.nombre = fila["nombre"].as<std::string>();
-
-        producto.descripcion = fila["descripcion"].is_null()
-            ? ""
-            : fila["descripcion"].as<std::string>();
-
-        producto.precio = fila["precio"].as<double>();
-
-        producto.disponible = fila["disponible"].as<bool>();
+        std::unique_ptr<Producto> producto = mapearProducto(fila);
 
         productos.push_back(producto);
     }
@@ -54,7 +44,7 @@ std::vector<Producto> ProductoRepositorio::obtenerDisponibles(std::int64_t resta
     return productos;
 }
 
-std::optional<Producto>ProductoRepositorio::buscarPorId(
+std::optional<std::unique_ptr<Producto>> ProductoRepositorio::buscarPorId(
     std::int64_t productoId,
     std::int64_t restauranteId
 ) {
@@ -70,7 +60,10 @@ std::optional<Producto>ProductoRepositorio::buscarPorId(
                 nombre,
                 descripcion,
                 precio,
-                disponible
+                disponible,
+                tipo,
+                recargo,
+                recargo_especial
             FROM foodflow.producto
             WHERE id = $1
                 AND restaurante_id = $2
@@ -86,23 +79,39 @@ std::optional<Producto>ProductoRepositorio::buscarPorId(
 
     const auto& fila = resultado[0];
 
-    Producto producto;
-
-    producto.id = fila["id"].as<std::int64_t>();
-
-    producto.restauranteId = fila["restaurante_id"].as<std::int64_t>();
-
-    producto.nombre = fila["nombre"].as<std::string>();
-
-    producto.descripcion = fila["descripcion"].is_null()
-        ? ""
-        : fila["descripcion"].as<std::string>();
-
-    producto.precio = fila["precio"].as<double>();
-
-    producto.disponible = fila["disponible"].as<bool>();
+    std::unique_ptr<Producto> producto = mapearProducto(fila);
 
     return producto;
+}
+
+std::unique_ptr<Producto> ProductoRepositorio::mapearProducto(const pqxx::row& fila) {
+
+    const auto id = fila["id"].as<std::int64_t>();
+    const auto restauranteId = fila["restaurante_id"].as<std::int64_t>();
+    const auto nombre = fila["nombre"].as<std::string>();
+    const auto descripcion = fila["descripcion"].is_null()
+        ? "" 
+        : fila["descripcion"].as<std::string>();
+
+    const auto precio = fila["precio"].as<double>();
+    const auto disponible = fila["disponible"].as<bool>();
+    const auto tipo = fila["tipo"].as<std::string>();
+    const auto recargo = fila["recargo"].as<double>();
+    const auto recargoEspecial = fila["recargo_especial"].as<double>();
+
+    if (tipo == convTexto(TiposProducto::COMIDA)) {
+        return std::make_unique<ProductoComida>(id, restauranteId, nombre, descripcion, precio, disponible, recargo);
+    }
+
+    if (tipo == convTexto(TiposProducto::BEBIDA)) {
+        return std::make_unique<ProductoBebida>(id, restauranteId, nombre, descripcion, precio, disponible, recargo);
+    }
+
+    if (tipo == convTexto(TiposProducto::ESPECIAL)) {
+        return std::make_unique<ProductoEspecial>(id, restauranteId, nombre, descripcion, precio, disponible, recargo, recargoEspecial);
+    }
+
+    throw std::runtime_error("Tipo de producto desconocido: " + tipo);
 }
 
 }

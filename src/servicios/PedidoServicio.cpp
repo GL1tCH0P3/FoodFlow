@@ -10,7 +10,7 @@ namespace foodflow {
 PedidoServicio::PedidoServicio(
     ClienteRepositorio& clienteRepositorio,
     RestauranteRepositorio& restauranteRepositorio,
-    ProductoRepositorio& productoRepositorio,
+    IProductoRepositorio& productoRepositorio,
     PedidoRepositorio& pedidoRepositorio,
     PedidoValidador& validador
 )
@@ -103,7 +103,7 @@ Pedido PedidoServicio::procesar(
         }
 
 
-        if (!producto->disponible) {
+        if (!producto->estaDisponible()) {
 
             pedido.resultadoValidacion = "RECHAZADO";
 
@@ -120,7 +120,7 @@ Pedido PedidoServicio::procesar(
 
         detalle.cantidad = itemSolicitud.cantidad;
 
-        detalle.precioUnitario = producto->precio;
+        detalle.precioUnitario = producto->calcularPrecioFinal();
 
         detalle.subtotal = detalle.cantidad * detalle.precioUnitario;
 
