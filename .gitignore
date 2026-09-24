@@ -2,7 +2,8 @@
 # FOODFLOW - ARCHIVOS GENERADOS / LOCALES
 # ============================================================
 
-facturas/
+facturas/*
+!facturas/.gitkeep
 
 # Dependencias extraídas localmente
 .deps/
