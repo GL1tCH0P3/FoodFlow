@@ -83,4 +83,76 @@ std::int64_t PedidoRepositorio::guardar(Pedido& pedido) {
     return pedido.id;
 }
 
+
+std::vector<PedidoResumen>
+PedidoRepositorio::obtenerHistorico() {
+
+    pqxx::read_transaction transaccion{
+        db.obtener()
+    };
+
+    pqxx::result resultado =
+        transaccion.exec(
+            R"(
+                SELECT
+                    p.id,
+                    p.fecha,
+                    c.nombre AS cliente,
+                    r.nombre AS restaurante,
+                    p.metodo_pago,
+                    p.subtotal,
+                    p.costo_domicilio,
+                    p.total,
+                    p.resultado_validacion,
+                    COALESCE(p.estado, '') AS estado
+
+                FROM foodflow.pedido p
+
+                INNER JOIN foodflow.cliente c
+                    ON c.id = p.cliente_id
+
+                INNER JOIN foodflow.restaurante r
+                    ON r.id = p.restaurante_id
+
+                ORDER BY p.id DESC
+            )"
+        );
+
+
+    std::vector<PedidoResumen> pedidos;
+
+    pedidos.reserve(resultado.size());
+
+
+    for (const auto& fila : resultado) {
+
+        PedidoResumen pedido;
+
+        pedido.id = fila["id"].as<std::int64_t>();
+
+        pedido.fecha = fila["fecha"].as<std::string>();
+
+        pedido.cliente = fila["cliente"].as<std::string>();
+
+        pedido.restaurante = fila["restaurante"].as<std::string>();
+
+        pedido.metodoPago = fila["metodo_pago"].as<std::string>();
+
+        pedido.subtotal = fila["subtotal"].as<double>();
+
+        pedido.costoDomicilio = fila["costo_domicilio"].as<double>();
+
+        pedido.total = fila["total"].as<double>();
+
+        pedido.resultadoValidacion = fila["resultado_validacion"].as<std::string>();
+
+        pedido.estado = fila["estado"].as<std::string>();
+
+        pedidos.push_back(pedido);
+    }
+
+
+    return pedidos;
+}
+
 }

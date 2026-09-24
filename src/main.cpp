@@ -1,6 +1,9 @@
+#include <cstdint>
 #include <exception>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <string>
 
 #include "config/ConfiguracionBD.hpp"
 
@@ -9,10 +12,11 @@
 #include "presentacion/ConsolaPedido.hpp"
 
 #include "repositorios/ClienteRepositorio.hpp"
-#include "repositorios/RestauranteRepositorio.hpp"
-#include "repositorios/ProductoRepositorio.hpp"
 #include "repositorios/PedidoRepositorio.hpp"
+#include "repositorios/ProductoRepositorio.hpp"
+#include "repositorios/RestauranteRepositorio.hpp"
 
+#include "servicios/FacturaCsvServicio.hpp"
 #include "servicios/PedidoServicio.hpp"
 
 #include "validadores/PedidoValidador.hpp"
@@ -21,33 +25,174 @@
 using namespace foodflow;
 
 
+namespace {
+
+int leerOpcionMenu() {
+
+    int opcion;
+
+    while (true) {
+
+        std::cout
+            << "\nSeleccione una opcion: ";
+
+        if (std::cin >> opcion) {
+            return opcion;
+        }
+
+        std::cout
+            << "\nOpcion invalida. Intente nuevamente.\n";
+
+        std::cin.clear();
+
+        std::cin.ignore(
+            std::numeric_limits<std::streamsize>::max(),
+            '\n'
+        );
+    }
+}
+
+
+void mostrarResultadoPedido(
+    const Pedido& pedido
+) {
+
+    std::cout
+        << "\n========================================\n"
+        << "          RESULTADO DEL PEDIDO\n"
+        << "========================================\n\n";
+
+
+    std::cout
+        << "Pedido ID: "
+        << pedido.id
+        << "\n";
+
+
+    std::cout
+        << "Resultado: "
+        << pedido.resultadoValidacion
+        << "\n";
+
+
+    std::cout
+        << std::fixed
+        << std::setprecision(2);
+
+
+    std::cout
+        << "Subtotal: $"
+        << pedido.subtotal
+        << "\n";
+
+
+    std::cout
+        << "Domicilio: $"
+        << pedido.costoDomicilio
+        << "\n";
+
+
+    std::cout
+        << "Total: $"
+        << pedido.total
+        << "\n";
+
+
+    std::cout
+        << "Tiempo estimado: "
+        << pedido.tiempoEstimadoMin
+        << " minutos\n";
+
+
+    if (pedido.estado.has_value()) {
+
+        std::cout
+            << "Estado: "
+            << pedido.estado.value()
+            << "\n";
+    }
+
+
+    std::cout
+        << "Mensaje: "
+        << pedido.mensaje
+        << "\n";
+}
+
+
+void mostrarMenu() {
+
+    std::cout
+        << "\n========================================\n"
+        << "               FOODFLOW\n"
+        << "========================================\n"
+        << "\n"
+        << "1. Registrar nuevo pedido\n"
+        << "2. Ver historico de pedidos\n"
+        << "0. Salir\n";
+}
+
+}
+
+
 int main() {
 
     try {
 
-        std::cout
-            << "\n========================================\n"
-            << "               FOODFLOW\n"
-            << "========================================\n";
+        // ====================================================
+        // CONFIGURACION Y CONEXION
+        // ====================================================
 
+        ConfiguracionBD configuracion =
+            ConfiguracionBD::desdeEntorno();
 
-        ConfiguracionBD configuracion = ConfiguracionBD::desdeEntorno();
 
         ConexionPostgres db{
             configuracion
         };
 
-        std::cout<< "\nConexion con PostgreSQL establecida.\n";
 
-        ClienteRepositorio clienteRepositorio{db};
+        std::cout
+            << "\n========================================\n"
+            << "               FOODFLOW\n"
+            << "========================================\n"
+            << "\nConexion con PostgreSQL establecida correctamente.\n";
 
-        RestauranteRepositorio restauranteRepositorio{db};
 
-        ProductoRepositorio productoRepositorio{db};
+        // ====================================================
+        // REPOSITORIOS
+        // ====================================================
 
-        PedidoRepositorio pedidoRepositorio{db};
+        ClienteRepositorio clienteRepositorio{
+            db
+        };
+
+
+        RestauranteRepositorio restauranteRepositorio{
+            db
+        };
+
+
+        ProductoRepositorio productoRepositorio{
+            db
+        };
+
+
+        PedidoRepositorio pedidoRepositorio{
+            db
+        };
+
+
+        // ====================================================
+        // VALIDADORES
+        // ====================================================
 
         PedidoValidador validador;
+
+
+        // ====================================================
+        // SERVICIOS
+        // ====================================================
 
         PedidoServicio pedidoServicio{
             clienteRepositorio,
@@ -57,77 +202,205 @@ int main() {
             validador
         };
 
+
+        FacturaCsvServicio facturaServicio{
+            clienteRepositorio,
+            restauranteRepositorio,
+            productoRepositorio
+        };
+
+
+        // ====================================================
+        // PRESENTACION
+        // ====================================================
+
         ConsolaPedido consola{
             clienteRepositorio,
             productoRepositorio
         };
 
-        // Por ahora FoodFlow trabaja con el
-        // restaurante inicial del prototipo.
+
+        // Por ahora FoodFlow trabaja con el restaurante
+        // principal definido para el prototipo.
         constexpr std::int64_t RESTAURANTE_ID = 1;
 
-        SolicitudPedido solicitud = consola.capturarSolicitud(RESTAURANTE_ID);
 
-        std::cout<< "\nProcesando pedido...\n\n";
+        // ====================================================
+        // CICLO PRINCIPAL
+        // ====================================================
 
-        Pedido pedido = pedidoServicio.procesar(solicitud);
-
-        std::cout
-            << "========================================\n"
-            << "          RESULTADO DEL PEDIDO\n"
-            << "========================================\n\n";
+        bool ejecutando = true;
 
 
-        std::cout
-            << "Pedido ID: "
-            << pedido.id
-            << "\n";
+        while (ejecutando) {
 
-        std::cout
-            << "Resultado: "
-            << pedido.resultadoValidacion
-            << "\n";
+            mostrarMenu();
 
-        std::cout
-            << "Subtotal: $"
-            << std::fixed
-            << std::setprecision(2)
-            << pedido.subtotal
-            << "\n";
+            const int opcion =
+                leerOpcionMenu();
 
-        std::cout
-            << "Domicilio: $"
-            << pedido.costoDomicilio
-            << "\n";
 
-        std::cout
-            << "Total: $"
-            << pedido.total
-            << "\n";
+            switch (opcion) {
 
-        std::cout
-            << "Tiempo estimado: "
-            << pedido.tiempoEstimadoMin
-            << " minutos\n";
+                // ============================================
+                // REGISTRAR PEDIDO
+                // ============================================
 
-        if (pedido.estado.has_value()) {
+                case 1: {
 
-            std::cout
-                << "Estado: "
-                << pedido.estado.value()
-                << "\n";
+                    try {
+
+                        SolicitudPedido solicitud =
+                            consola.capturarSolicitud(
+                                RESTAURANTE_ID
+                            );
+
+
+                        std::cout
+                            << "\nProcesando pedido...\n";
+
+
+                        Pedido pedido =
+                            pedidoServicio.procesar(
+                                solicitud
+                            );
+
+
+                        mostrarResultadoPedido(
+                            pedido
+                        );
+
+
+                        // ------------------------------------
+                        // Generacion de factura
+                        // ------------------------------------
+
+                        if (
+                            pedido.resultadoValidacion
+                            == "CONFIRMADO"
+                        ) {
+
+                            try {
+
+                                const std::string rutaFactura =
+                                    facturaServicio.generar(
+                                        pedido
+                                    );
+
+
+                                std::cout
+                                    << "\nFactura CSV generada correctamente:\n"
+                                    << rutaFactura
+                                    << "\n";
+                            }
+                            catch (
+                                const std::exception& error
+                            ) {
+
+                                // La factura es una salida
+                                // secundaria. El pedido ya fue
+                                // persistido correctamente.
+
+                                std::cerr
+                                    << "\nEl pedido fue registrado, "
+                                    << "pero no fue posible generar "
+                                    << "la factura CSV:\n"
+                                    << error.what()
+                                    << "\n";
+                            }
+                        }
+
+
+                        std::cout << "\n";
+                    }
+                    catch (
+                        const std::exception& error
+                    ) {
+
+                        std::cerr
+                            << "\nNo fue posible procesar el pedido:\n"
+                            << error.what()
+                            << "\n";
+                    }
+
+                    break;
+                }
+
+
+                // ============================================
+                // HISTORICO
+                // ============================================
+
+                case 2: {
+
+                    try {
+
+                        consola.mostrarHistorico(
+                            pedidoRepositorio
+                        );
+                    }
+                    catch (
+                        const std::exception& error
+                    ) {
+
+                        std::cerr
+                            << "\nNo fue posible consultar "
+                            << "el historico de pedidos:\n"
+                            << error.what()
+                            << "\n";
+                    }
+
+                    break;
+                }
+
+
+                // ============================================
+                // SALIR
+                // ============================================
+
+                case 0: {
+
+                    ejecutando = false;
+
+                    std::cout
+                        << "\nCerrando FoodFlow...\n";
+
+                    break;
+                }
+
+
+                // ============================================
+                // OPCION INVALIDA
+                // ============================================
+
+                default: {
+
+                    std::cout
+                        << "\nOpcion no valida. "
+                        << "Seleccione 0, 1 o 2.\n";
+
+                    break;
+                }
+            }
         }
 
-        std::cout
-            << "Mensaje: "
-            << pedido.mensaje
-            << "\n\n";
-
     }
-    catch (const std::exception& error) {
+    catch (
+        const std::exception& error
+    ) {
+
+        // Los errores que llegan hasta aqui son errores
+        // generales de inicializacion, por ejemplo:
+        //
+        // - variables de entorno faltantes
+        // - conexion PostgreSQL fallida
+        // - configuracion invalida
 
         std::cerr
-            << "\nError en FoodFlow:\n"
+            << "\n========================================\n"
+            << "ERROR AL INICIAR FOODFLOW\n"
+            << "========================================\n"
+            << "\n"
             << error.what()
             << "\n";
 

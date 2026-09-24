@@ -2,6 +2,8 @@
 # FOODFLOW - ARCHIVOS GENERADOS / LOCALES
 # ============================================================
 
+facturas/
+
 # Dependencias extraídas localmente
 .deps/
 .deps_tmp/

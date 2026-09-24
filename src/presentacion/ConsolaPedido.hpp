@@ -6,6 +6,7 @@
 #include "interfaces/IProductoRepositorio.hpp"
 #include "modelos/SolicitudPedido.hpp"
 #include "repositorios/ClienteRepositorio.hpp"
+#include "repositorios/PedidoRepositorio.hpp"
 
 namespace foodflow {
 
@@ -26,6 +27,8 @@ public:
     );
 
     SolicitudPedido capturarSolicitud(std::int64_t restauranteId);
+
+    void mostrarHistorico(PedidoRepositorio& pedidoRepositorio) const; 
 };
 
 }

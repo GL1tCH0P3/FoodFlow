@@ -194,14 +194,62 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
         solicitud.metodoPago = "Transferencia";
     }
     else {
-        // Deliberadamente permitimos que llegue una opción
-        // inválida al validador del dominio.
         solicitud.metodoPago = "No soportado";
     }
 
     solicitud.distanciaKm =  leerDecimal("Distancia de entrega en km: ");
 
     return solicitud;
+}
+
+
+void ConsolaPedido::mostrarHistorico(
+    PedidoRepositorio& pedidoRepositorio
+) const {
+
+    auto pedidos =
+        pedidoRepositorio.obtenerHistorico();
+
+
+    std::cout
+        << "\nHISTORICO DE PEDIDOS\n"
+        << "==========================================================================\n";
+
+
+    if (pedidos.empty()) {
+        std::cout
+            << "No existen pedidos registrados.\n";
+
+        return;
+    }
+
+
+    for (const auto& pedido : pedidos) {
+
+        std::cout
+            << "\nPedido #" << pedido.id
+            << "\nFecha: " << pedido.fecha
+            << "\nCliente: " << pedido.cliente
+            << "\nRestaurante: " << pedido.restaurante
+            << "\nPago: " << pedido.metodoPago
+            << "\nSubtotal: $"
+            << std::fixed
+            << std::setprecision(2)
+            << pedido.subtotal
+            << "\nDomicilio: $"
+            << pedido.costoDomicilio
+            << "\nTotal: $"
+            << pedido.total
+            << "\nResultado: "
+            << pedido.resultadoValidacion
+            << "\nEstado: "
+            << (
+                pedido.estado.empty()
+                    ? "N/A"
+                    : pedido.estado
+            )
+            << "\n--------------------------------------------------\n";
+    }
 }
 
 }
