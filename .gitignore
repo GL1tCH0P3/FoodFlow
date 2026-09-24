@@ -1,3 +1,20 @@
+# ============================================================
+# FOODFLOW - ARCHIVOS GENERADOS / LOCALES
+# ============================================================
+
+# Dependencias extraídas localmente
+.deps/
+.deps_tmp/
+
+# Fuentes y staging usados para construir dependencias
+.vendor-src/
+.vendor-stage/
+vendor-package/
+
+# vcpkg antiguo / herramientas locales
+.tools/
+vcpkg_installed/
+
 # Compilación
 build/
 bin/
@@ -6,7 +23,10 @@ out/
 Debug/
 Release/
 
-# Ejecutables y archivos objeto
+# Distribución generada
+dist/
+
+# Ejecutables y objetos
 *.exe
 *.out
 *.app
@@ -18,24 +38,13 @@ Release/
 *.dll
 *.dylib
 
-# Archivos de depuración
-*.dSYM/
+# Depuración
 *.pdb
-
-# CMake
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-Makefile
+*.ilk
+*.dSYM/
 
 # Credenciales locales
 config/database.env
-
-# vcpkg
-vcpkg_installed/
 
 # Visual Studio
 .vs/
@@ -46,23 +55,14 @@ x64/
 x86/
 
 # VS Code
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 
 # JetBrains
 .idea/
-cmake-build-*/
-
-# Code::Blocks
-*.cbp
-*.depend
-*.layout
 
 # Logs
 *.log
-
-# Sistema operativo
-.DS_Store
-Thumbs.db
 
 # Temporales
 *.tmp
@@ -71,6 +71,6 @@ Thumbs.db
 *.swp
 *.swo
 
-# VS Code
-.vscode/*
-!.vscode/tasks.json
+# Sistema operativo
+.DS_Store
+Thumbs.db

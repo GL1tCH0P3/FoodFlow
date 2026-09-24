@@ -1,30 +1,28 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
+#include "interfaces/IProductoRepositorio.hpp"
 #include "modelos/SolicitudPedido.hpp"
 #include "repositorios/ClienteRepositorio.hpp"
-#include "repositorios/ProductoRepositorio.hpp"
 
 namespace foodflow {
 
 class ConsolaPedido {
 private:
     ClienteRepositorio& clienteRepositorio;
-    ProductoRepositorio& productoRepositorio;
 
-    int leerEntero(
-        const std::string& mensaje
-    ) const;
+    IProductoRepositorio& productoRepositorio;
 
-    double leerDecimal(
-        const std::string& mensaje
-    ) const;
+    int leerEntero(const std::string& mensaje) const;
+
+    double leerDecimal(const std::string& mensaje) const;
 
 public:
     ConsolaPedido(
         ClienteRepositorio& clienteRepositorio,
-        ProductoRepositorio& productoRepositorio
+        IProductoRepositorio& productoRepositorio
     );
 
     SolicitudPedido capturarSolicitud(std::int64_t restauranteId);

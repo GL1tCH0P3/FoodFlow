@@ -22,9 +22,7 @@ PedidoServicio::PedidoServicio(
 }
 
 
-Pedido PedidoServicio::procesar(
-    const SolicitudPedido& solicitud
-) {
+Pedido PedidoServicio::procesar(const SolicitudPedido& solicitud) {
     Pedido pedido;
 
     pedido.clienteId = solicitud.clienteId;
@@ -91,8 +89,7 @@ Pedido PedidoServicio::procesar(
     for (const auto& itemSolicitud : solicitud.items) {
 
         auto producto = productoRepositorio.buscarPorId(itemSolicitud.productoId, solicitud.restauranteId);
-        if (!producto.has_value()) {
-
+        if (!producto) {
             pedido.resultadoValidacion = "RECHAZADO";
 
             pedido.mensaje = "Uno de los productos solicitados no existe.";
@@ -101,7 +98,6 @@ Pedido PedidoServicio::procesar(
 
             return pedido;
         }
-
 
         if (!producto->estaDisponible()) {
 
@@ -116,7 +112,7 @@ Pedido PedidoServicio::procesar(
 
         PedidoDetalle detalle;
 
-        detalle.productoId = producto->id;
+        detalle.productoId = producto->getId();
 
         detalle.cantidad = itemSolicitud.cantidad;
 

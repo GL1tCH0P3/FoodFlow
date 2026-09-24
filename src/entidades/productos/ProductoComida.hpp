@@ -1,12 +1,16 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <utility>
+
 #include "entidades/productos/Producto.hpp"
 
 namespace foodflow {
 
 class ProductoComida : public Producto {
 private:
-    double recargo;
+    double recargo_;
 
 public:
     ProductoComida(
@@ -18,13 +22,23 @@ public:
         bool disponible,
         double recargo
     )
-        : Producto(id, restauranteId, std::move(nombre), std::move(descripcion), precioBase, disponible),
-          recargo(recargo) {
+        : Producto(
+              id,
+              restauranteId,
+              std::move(nombre),
+              std::move(descripcion),
+              precioBase,
+              disponible
+          ),
+          recargo_(recargo) {
+    }
 
+    double getRecargo() const {
+        return recargo_;
     }
 
     double calcularPrecioFinal() const override {
-        return getPrecioBase() + recargo;
+        return getPrecioBase() + recargo_;
     }
 
     std::string tipo() const override {

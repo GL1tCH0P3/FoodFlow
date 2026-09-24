@@ -2,24 +2,22 @@
 
 #include <cstdint>
 #include <string>
-
-#include "entidades/productos/ProductoComida.hpp"
-#include "entidades/productos/ProductoBebida.hpp"
-#include "entidades/productos/ProductoEspecial.hpp"
+#include <utility>
 
 namespace foodflow {
 
 class Producto {
 private:
-    std::int64_t id;
-    std::int64_t restauranteId;
-    std::string nombre;
-    std::string descripcion;
+    std::int64_t id_;
+    std::int64_t restauranteId_;
 
-    double precioBase;
-    bool disponible;
+    std::string nombre_;
+    std::string descripcion_;
 
-public:
+    double precioBase_;
+    bool disponible_;
+
+protected:
     Producto(
         std::int64_t id,
         std::int64_t restauranteId,
@@ -28,39 +26,39 @@ public:
         double precioBase,
         bool disponible
     )
-        : id(id),
-        restauranteId(restauranteId),
-        nombre(nombre),
-        descripcion(descripcion),
-        precioBase(precioBase),
-        disponible(disponible) {
-
+        : id_(id),
+          restauranteId_(restauranteId),
+          nombre_(std::move(nombre)),
+          descripcion_(std::move(descripcion)),
+          precioBase_(precioBase),
+          disponible_(disponible) {
     }
 
+public:
     virtual ~Producto() = default;
 
     std::int64_t getId() const {
-        return id;
+        return id_;
     }
 
     std::int64_t getRestauranteId() const {
-        return restauranteId;
+        return restauranteId_;
     }
 
     const std::string& getNombre() const {
-        return nombre;
+        return nombre_;
     }
 
     const std::string& getDescripcion() const {
-        return descripcion;
+        return descripcion_;
     }
 
     double getPrecioBase() const {
-        return precioBase;
+        return precioBase_;
     }
 
     bool estaDisponible() const {
-        return disponible;
+        return disponible_;
     }
 
     virtual double calcularPrecioFinal() const = 0;

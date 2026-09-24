@@ -1,11 +1,41 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
+REM ============================================================
+REM FOODFLOW - SETUP
+REM
+REM Se ejecuta al preparar una maquina de desarrollo.
+REM
+REM Responsabilidad:
+REM   - Verificar MSVC C++ x64.
+REM   - Verificar paquete vendor.
+REM   - Extraer dependencias precompiladas.
+REM   - Detectar cambios mediante SHA-256.
+REM   - Crear database.env local.
+REM   - Compilar FoodFlow.
+REM
+REM NO usa vcpkg.
+REM NO compila libpq.
+REM NO compila libpqxx.
+REM NO descarga dependencias.
+REM ============================================================
+
 cd /d "%~dp0.."
 
 set "ROOT=%CD%"
-set "TOOLS_DIR=%ROOT%\.tools"
-set "LOCAL_VCPKG=%TOOLS_DIR%\vcpkg"
+
+set "VENDOR_ZIP=!ROOT!\vendor\foodflow-deps-win64.zip"
+
+set "DEPS_DIR=!ROOT!\.deps"
+set "DEPS_TMP=!ROOT!\.deps_tmp"
+
+set "DEPS_HASH_FILE=!DEPS_DIR!\.vendor.sha256"
+
+set "TRIPLET_DIR=!DEPS_DIR!\x64-windows"
+set "INCLUDE_DIR=!TRIPLET_DIR!\include"
+set "LIB_DIR=!TRIPLET_DIR!\lib"
+set "BIN_DIR=!TRIPLET_DIR!\bin"
+
 
 echo.
 echo ========================================
@@ -13,191 +43,406 @@ echo          FOODFLOW - SETUP
 echo ========================================
 echo.
 
-REM ============================================================
-REM 1. Verificar Git
-REM ============================================================
-
-echo [1/6] Verificando Git...
-
-where git.exe >nul 2>&1
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: Git no esta instalado o no esta disponible en PATH.
-    echo Instale Git y vuelva a ejecutar este archivo.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo       Git encontrado.
-
 
 REM ============================================================
-REM 2. Buscar vcpkg existente
+REM 1. VERIFICAR TOOLCHAIN
+REM ============================================================
+
+echo [1/5] Verificando compilador C++...
+
+call "!ROOT!\scripts\msvc_env.bat"
+
+if errorlevel 1 goto ERROR_MSVC
+
+echo       Visual Studio:
+echo       !FOODFLOW_VS_PATH!
+echo.
+echo       MSVC:
+echo       !FOODFLOW_MSVC_VERSION!
+echo.
+echo       Arquitectura: x64
+echo       Compilador preparado correctamente.
+
+
+REM ============================================================
+REM 2. VERIFICAR PAQUETE VENDOR
 REM ============================================================
 
 echo.
-echo [2/6] Buscando vcpkg...
+echo [2/5] Verificando paquete de dependencias...
 
-set "VCPKG_EXE="
+if not exist "!VENDOR_ZIP!" goto ERROR_VENDOR
 
-REM Primero: variable de entorno existente
-if defined VCPKG_ROOT (
-    if exist "%VCPKG_ROOT%\vcpkg.exe" (
-        set "VCPKG_EXE=%VCPKG_ROOT%\vcpkg.exe"
-        goto VCPKG_READY
-    )
-)
+set "HASH_FILE=!TEMP!\foodflow_hash_!RANDOM!_!RANDOM!.txt"
 
-REM Segundo: vcpkg incluido con Visual Studio / Build Tools
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+powershell.exe ^
+    -NoProfile ^
+    -ExecutionPolicy Bypass ^
+    -Command ^
+    "(Get-FileHash -Algorithm SHA256 -LiteralPath $env:VENDOR_ZIP).Hash.ToLower()" ^
+    > "!HASH_FILE!" 2>nul
 
-if exist "%VSWHERE%" (
+set "ZIP_HASH="
 
-    set "VS_PATH="
+if exist "!HASH_FILE!" set /p ZIP_HASH=<"!HASH_FILE!"
 
-    for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -property installationPath`) do (
-        set "VS_PATH=%%I"
-    )
+del /Q "!HASH_FILE!" >nul 2>&1
 
-    if defined VS_PATH (
-        if exist "!VS_PATH!\VC\vcpkg\vcpkg.exe" (
-            set "VCPKG_ROOT=!VS_PATH!\VC\vcpkg"
-            set "VCPKG_EXE=!VCPKG_ROOT!\vcpkg.exe"
-            goto VCPKG_READY
-        )
-    )
-)
+if not defined ZIP_HASH goto ERROR_HASH
 
-REM Tercero: vcpkg local del proyecto
-if exist "%LOCAL_VCPKG%\vcpkg.exe" (
-    set "VCPKG_ROOT=%LOCAL_VCPKG%"
-    set "VCPKG_EXE=%LOCAL_VCPKG%\vcpkg.exe"
-    goto VCPKG_READY
-)
+echo       Archivo:
+echo       vendor\foodflow-deps-win64.zip
+echo.
+echo       SHA-256:
+echo       !ZIP_HASH!
+echo.
+echo       Paquete valido.
 
 
 REM ============================================================
-REM 3. Descargar vcpkg si no existe
-REM ============================================================
-
-echo       vcpkg no encontrado.
-echo       Instalando copia local para FoodFlow...
-
-if not exist "%TOOLS_DIR%" (
-    mkdir "%TOOLS_DIR%"
-)
-
-git clone https://github.com/microsoft/vcpkg.git "%LOCAL_VCPKG%"
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: No fue posible descargar vcpkg.
-    pause
-    exit /b 1
-)
-
-call "%LOCAL_VCPKG%\bootstrap-vcpkg.bat" -disableMetrics
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: No fue posible inicializar vcpkg.
-    pause
-    exit /b 1
-)
-
-set "VCPKG_ROOT=%LOCAL_VCPKG%"
-set "VCPKG_EXE=%LOCAL_VCPKG%\vcpkg.exe"
-
-
-:VCPKG_READY
-
-echo       vcpkg listo:
-echo       %VCPKG_EXE%
-
-
-REM ============================================================
-REM 4. Restaurar dependencias del proyecto
+REM 3. PREPARAR DEPENDENCIAS
 REM ============================================================
 
 echo.
-echo [3/6] Restaurando dependencias...
+echo [3/5] Verificando dependencias locales...
 
-"%VCPKG_EXE%" install --triplet x64-windows
+set "INSTALLED_HASH="
 
-if errorlevel 1 (
-    echo.
-    echo ERROR: No fue posible restaurar las dependencias.
-    pause
-    exit /b 1
-)
+if exist "!DEPS_HASH_FILE!" set /p INSTALLED_HASH=<"!DEPS_HASH_FILE!"
 
-echo       Dependencias restauradas.
+set "DEPS_OK=1"
+
+if not exist "!INCLUDE_DIR!\pqxx\" set "DEPS_OK=0"
+
+if not exist "!LIB_DIR!\libpq.lib" set "DEPS_OK=0"
+
+set "LOCAL_PQXX_LIB="
+set "PQXX_CHECK_FILE=!TEMP!\foodflow_pqxx_check_!RANDOM!_!RANDOM!.txt"
+
+if exist "!LIB_DIR!\" dir /b /a-d "!LIB_DIR!\*pqxx*.lib" > "!PQXX_CHECK_FILE!" 2>nul
+
+if exist "!PQXX_CHECK_FILE!" set /p LOCAL_PQXX_LIB=<"!PQXX_CHECK_FILE!"
+
+del /Q "!PQXX_CHECK_FILE!" >nul 2>&1
+
+if not defined LOCAL_PQXX_LIB set "DEPS_OK=0"
+
+if /I not "!INSTALLED_HASH!"=="!ZIP_HASH!" set "DEPS_OK=0"
+
+if "!DEPS_OK!"=="1" goto DEPS_ALREADY_READY
 
 
 REM ============================================================
-REM 5. Crear configuracion local
+REM EXTRAER DEPENDENCIAS EN DIRECTORIO TEMPORAL
+REM ============================================================
+
+echo       Preparando dependencias...
+
+if exist "!DEPS_TMP!\" rmdir /S /Q "!DEPS_TMP!"
+
+mkdir "!DEPS_TMP!"
+
+if errorlevel 1 goto ERROR_TEMP_DIR
+
+powershell.exe ^
+    -NoProfile ^
+    -ExecutionPolicy Bypass ^
+    -Command ^
+    "Expand-Archive -LiteralPath $env:VENDOR_ZIP -DestinationPath $env:DEPS_TMP -Force"
+
+if errorlevel 1 goto ERROR_EXTRACT
+
+
+REM ============================================================
+REM VALIDAR CONTENIDO DEL PAQUETE
+REM ============================================================
+
+if not exist "!DEPS_TMP!\x64-windows\include\pqxx\" goto ERROR_VENDOR_HEADERS
+
+if not exist "!DEPS_TMP!\x64-windows\lib\libpq.lib" goto ERROR_VENDOR_LIBPQ
+
+set "TEMP_PQXX_LIB="
+set "TEMP_PQXX_FILE=!TEMP!\foodflow_pqxx_vendor_!RANDOM!_!RANDOM!.txt"
+
+dir /b /a-d ^
+    "!DEPS_TMP!\x64-windows\lib\*pqxx*.lib" ^
+    > "!TEMP_PQXX_FILE!" ^
+    2>nul
+
+if exist "!TEMP_PQXX_FILE!" set /p TEMP_PQXX_LIB=<"!TEMP_PQXX_FILE!"
+
+del /Q "!TEMP_PQXX_FILE!" >nul 2>&1
+
+if not defined TEMP_PQXX_LIB goto ERROR_VENDOR_PQXX
+
+
+REM ============================================================
+REM INSTALAR DEPENDENCIAS LOCALES
+REM ============================================================
+
+if exist "!DEPS_DIR!\" rmdir /S /Q "!DEPS_DIR!"
+
+move "!DEPS_TMP!" "!DEPS_DIR!" >nul
+
+if errorlevel 1 goto ERROR_MOVE_DEPS
+
+> "!DEPS_HASH_FILE!" echo !ZIP_HASH!
+
+echo       Dependencias preparadas correctamente.
+
+goto DEPS_READY
+
+
+:DEPS_ALREADY_READY
+
+echo       Dependencias actualizadas.
+echo       No es necesario extraer nuevamente.
+
+
+:DEPS_READY
+
+
+REM ============================================================
+REM 4. CONFIGURACION LOCAL
 REM ============================================================
 
 echo.
-echo [4/6] Preparando configuracion...
+echo [4/5] Preparando configuracion local...
 
-if not exist "%ROOT%\config\database.env" (
+if not exist "!ROOT!\config\" mkdir "!ROOT!\config"
 
-    if not exist "%ROOT%\config\database.env.example" (
-        echo.
-        echo ERROR: No existe config\database.env.example
-        pause
-        exit /b 1
-    )
+if exist "!ROOT!\config\database.env" goto CONFIG_EXISTS
 
-    copy /Y ^
-        "%ROOT%\config\database.env.example" ^
-        "%ROOT%\config\database.env" >nul
+if not exist "!ROOT!\config\database.env.example" goto ERROR_CONFIG_EXAMPLE
 
-    echo       Se creo config\database.env
-    echo       Debe completar las credenciales de PostgreSQL.
-) else (
-    echo       database.env ya existe.
-)
+copy /Y ^
+    "!ROOT!\config\database.env.example" ^
+    "!ROOT!\config\database.env" ^
+    >nul
+
+if errorlevel 1 goto ERROR_CONFIG_COPY
+
+echo       Se creo:
+echo       config\database.env
+echo.
+echo       Complete sus credenciales de PostgreSQL.
+
+goto CONFIG_READY
+
+
+:CONFIG_EXISTS
+
+echo       config\database.env ya existe.
+
+
+:CONFIG_READY
 
 
 REM ============================================================
-REM 6. Compilar
+REM 5. COMPILAR
 REM ============================================================
 
 echo.
-echo [5/6] Compilando FoodFlow...
-
-call "%ROOT%\scripts\build.bat"
-
-if errorlevel 1 (
-    echo.
-    echo ERROR: La compilacion fallo.
-    pause
-    exit /b 1
-)
-
-
-REM ============================================================
-REM Resultado
-REM ============================================================
-
+echo [5/5] Compilando FoodFlow...
 echo.
-echo [6/6] Setup finalizado.
+
+call "!ROOT!\scripts\build.bat"
+
+if errorlevel 1 goto ERROR_BUILD
+
+
+REM ============================================================
+REM RESULTADO
+REM ============================================================
 
 echo.
 echo ========================================
-echo       FOODFLOW LISTO
+echo          FOODFLOW LISTO
 echo ========================================
 echo.
-echo Para continuar:
+echo Entorno:
 echo.
-echo   1. Abra config\database.env
-echo   2. Complete las credenciales entregadas
-echo   3. Ejecute run.bat
+echo   C++:        C++17
+echo   Compilador: MSVC !FOODFLOW_MSVC_VERSION!
+echo   Plataforma: Windows x64
+echo.
+echo Desarrollo normal:
+echo.
+echo   Compilar:
+echo       scripts\build.bat
+echo.
+echo   Ejecutar:
+echo       run.bat
+echo.
+echo No es necesario volver a ejecutar setup.bat
+echo despues de cada cambio de codigo.
+echo.
+
+pause
+exit /b 0
+
+
+REM ============================================================
+REM ERRORES
+REM ============================================================
+
+:ERROR_MSVC
+
+echo.
+echo ========================================
+echo ERROR: Toolchain C++ no disponible
+echo ========================================
 echo.
 pause
+exit /b 1
 
-exit /b 0
+
+:ERROR_VENDOR
+
+echo.
+echo ========================================
+echo ERROR: Paquete vendor no encontrado
+echo ========================================
+echo.
+echo Archivo esperado:
+echo.
+echo !VENDOR_ZIP!
+echo.
+pause
+exit /b 1
+
+
+:ERROR_HASH
+
+echo.
+echo ========================================
+echo ERROR: No se pudo calcular SHA-256
+echo ========================================
+echo.
+pause
+exit /b 1
+
+
+:ERROR_TEMP_DIR
+
+echo.
+echo ========================================
+echo ERROR: No se pudo crear .deps_tmp
+echo ========================================
+echo.
+pause
+exit /b 1
+
+
+:ERROR_EXTRACT
+
+echo.
+echo ========================================
+echo ERROR: No se pudo extraer el paquete vendor
+echo ========================================
+echo.
+
+if exist "!DEPS_TMP!\" rmdir /S /Q "!DEPS_TMP!"
+
+pause
+exit /b 1
+
+
+:ERROR_VENDOR_HEADERS
+
+echo.
+echo ========================================
+echo ERROR: Paquete vendor invalido
+echo ========================================
+echo.
+echo Falta:
+echo.
+echo x64-windows\include\pqxx
+echo.
+
+if exist "!DEPS_TMP!\" rmdir /S /Q "!DEPS_TMP!"
+
+pause
+exit /b 1
+
+
+:ERROR_VENDOR_LIBPQ
+
+echo.
+echo ========================================
+echo ERROR: Paquete vendor invalido
+echo ========================================
+echo.
+echo Falta:
+echo.
+echo x64-windows\lib\libpq.lib
+echo.
+
+if exist "!DEPS_TMP!\" rmdir /S /Q "!DEPS_TMP!"
+
+pause
+exit /b 1
+
+
+:ERROR_VENDOR_PQXX
+
+echo.
+echo ========================================
+echo ERROR: Paquete vendor invalido
+echo ========================================
+echo.
+echo No se encontro la biblioteca libpqxx.
+echo.
+
+if exist "!DEPS_TMP!\" rmdir /S /Q "!DEPS_TMP!"
+
+pause
+exit /b 1
+
+
+:ERROR_MOVE_DEPS
+
+echo.
+echo ========================================
+echo ERROR: No se pudo preparar .deps
+echo ========================================
+echo.
+pause
+exit /b 1
+
+
+:ERROR_CONFIG_EXAMPLE
+
+echo.
+echo ========================================
+echo ERROR: Configuracion base no encontrada
+echo ========================================
+echo.
+echo Falta:
+echo.
+echo config\database.env.example
+echo.
+pause
+exit /b 1
+
+
+:ERROR_CONFIG_COPY
+
+echo.
+echo ========================================
+echo ERROR: No se pudo crear database.env
+echo ========================================
+echo.
+pause
+exit /b 1
+
+
+:ERROR_BUILD
+
+echo.
+echo ========================================
+echo ERROR: La compilacion fallo
+echo ========================================
+echo.
+pause
+exit /b 1

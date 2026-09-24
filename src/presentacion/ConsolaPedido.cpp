@@ -9,7 +9,7 @@ namespace foodflow {
 
 ConsolaPedido::ConsolaPedido(
     ClienteRepositorio& clienteRepositorio,
-    ProductoRepositorio& productoRepositorio
+    IProductoRepositorio& productoRepositorio
 )
     : clienteRepositorio(clienteRepositorio),
       productoRepositorio(productoRepositorio) {
@@ -84,11 +84,9 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
         );
     }
 
-
     std::cout
         << "\nCLIENTES DISPONIBLES\n"
         << "--------------------------------------------------\n";
-
 
     for (const auto& cliente : clientes) {
 
@@ -102,7 +100,6 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
             << cliente.direccion
             << "\n";
     }
-
 
     int clienteId = leerEntero("\nSeleccione el ID del cliente: ");
 
@@ -138,16 +135,15 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
 
     for (const auto& producto : productos) {
         std::cout
-            << producto.id
+            << producto->getId()
             << ". "
-            << producto.nombre
+            << producto->getNombre()
             << " - $"
             << std::fixed
             << std::setprecision(2)
-            << producto.precio
+            << producto->calcularPrecioFinal()
             << "\n";
     }
-
 
     std::cout
         << "\nIngrese los productos del pedido.\n"
@@ -162,7 +158,7 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
         }
 
         auto producto = productoRepositorio.buscarPorId(productoId, restauranteId);
-        if (!producto.has_value()) {
+        if (!producto) {
             std::cout<< "Producto no valido.\n";
 
             continue;
@@ -173,7 +169,7 @@ SolicitudPedido ConsolaPedido::capturarSolicitud(std::int64_t restauranteId) {
         solicitud.items.push_back({productoId, cantidad});
 
         std::cout
-            << producto->nombre
+            << producto->getNombre()
             << " agregado al pedido.\n\n";
     }
 
