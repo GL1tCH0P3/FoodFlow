@@ -2,78 +2,169 @@
 # FOODFLOW - ARCHIVOS GENERADOS / LOCALES
 # ============================================================
 
+
+# ------------------------------------------------------------
+# Facturas generadas por la aplicacion
+# ------------------------------------------------------------
+
 facturas/*
 !facturas/.gitkeep
 
-# Dependencias extraídas localmente
+
+# ------------------------------------------------------------
+# Dependencias extraidas localmente
+#
+# La fuente reproducible permanece en:
+# vendor/foodflow-deps-win64.zip
+# ------------------------------------------------------------
+
 .deps/
 .deps_tmp/
 
-# Fuentes y staging usados para construir dependencias
+
+# ------------------------------------------------------------
+# Fuentes/staging utilizados al construir dependencias
+# ------------------------------------------------------------
+
 .vendor-src/
 .vendor-stage/
 vendor-package/
 
-# vcpkg antiguo / herramientas locales
+
+# ------------------------------------------------------------
+# Herramientas locales / vcpkg antiguo
+# ------------------------------------------------------------
+
 .tools/
 vcpkg_installed/
 
-# Compilación
+
+# ------------------------------------------------------------
+# Compilacion
+# ------------------------------------------------------------
+
 build/
 bin/
 obj/
 out/
+
 Debug/
 Release/
 
-# Distribución generada
+x64/
+x86/
+
+
+# ------------------------------------------------------------
+# Distribucion local
+#
+# Git no necesita dist porque cada desarrollador lo genera.
+# La entrega al profesor SI incluye dist dentro del ZIP.
+# ------------------------------------------------------------
+
 dist/
 
-# Ejecutables y objetos
+
+# ------------------------------------------------------------
+# Entregas empaquetadas
+#
+# IMPORTANTE:
+# Los ZIP generados para el profesor contienen database.env
+# con credenciales reales.
+# ------------------------------------------------------------
+
+release/
+FoodFlow-entrega-profesor.zip
+
+
+# ------------------------------------------------------------
+# Ejecutables / objetos / bibliotecas generadas
+#
+# Esto NO afecta vendor/foodflow-deps-win64.zip.
+# ------------------------------------------------------------
+
 *.exe
 *.out
 *.app
+
 *.o
 *.obj
+
 *.a
 *.lib
+
 *.so
 *.dll
 *.dylib
 
-# Depuración
+
+# ------------------------------------------------------------
+# Depuracion
+# ------------------------------------------------------------
+
 *.pdb
 *.ilk
 *.dSYM/
 
+
+# ------------------------------------------------------------
 # Credenciales locales
+#
+# database.env.example SI se versiona.
+# ------------------------------------------------------------
+
 config/database.env
 
+
+# ------------------------------------------------------------
 # Visual Studio
+# ------------------------------------------------------------
+
 .vs/
+
 *.suo
 *.user
 *.vcxproj.user
-x64/
-x86/
 
+
+# ------------------------------------------------------------
 # VS Code
+# ------------------------------------------------------------
+
 .vscode/*
 !.vscode/tasks.json
 
+
+# ------------------------------------------------------------
 # JetBrains
+# ------------------------------------------------------------
+
 .idea/
 
+
+# ------------------------------------------------------------
 # Logs
+# ------------------------------------------------------------
+
 *.log
 
+
+# ------------------------------------------------------------
 # Temporales
+# ------------------------------------------------------------
+
 *.tmp
 *.temp
+
 *~
+
 *.swp
 *.swo
 
+
+# ------------------------------------------------------------
 # Sistema operativo
+# ------------------------------------------------------------
+
 .DS_Store
 Thumbs.db

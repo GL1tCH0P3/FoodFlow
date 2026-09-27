@@ -3,32 +3,42 @@
 #include <string>
 
 #include "entidades/Pedido.hpp"
+
 #include "interfaces/IProductoRepositorio.hpp"
+
+#include "modelos/PedidoDetalleVista.hpp"
+
 #include "repositorios/ClienteRepositorio.hpp"
 #include "repositorios/RestauranteRepositorio.hpp"
 
-namespace foodflow {
+namespace foodflow
+{
 
-class FacturaCsvServicio {
-private:
-    ClienteRepositorio& clienteRepositorio;
-    RestauranteRepositorio& restauranteRepositorio;
-    IProductoRepositorio& productoRepositorio;
+    class FacturaCsvServicio
+    {
+    private:
+        ClienteRepositorio &clienteRepositorio;
 
-    std::string escaparCsv(
-        const std::string& valor
-    ) const;
+        RestauranteRepositorio &restauranteRepositorio;
 
-public:
-    FacturaCsvServicio(
-        ClienteRepositorio& clienteRepositorio,
-        RestauranteRepositorio& restauranteRepositorio,
-        IProductoRepositorio& productoRepositorio
-    );
+        IProductoRepositorio &productoRepositorio;
 
-    std::string generar(
-        const Pedido& pedido
-    );
-};
+        std::string escaparCsv(
+            const std::string &valor) const;
+
+    public:
+        FacturaCsvServicio(
+            ClienteRepositorio &clienteRepositorio,
+            RestauranteRepositorio &restauranteRepositorio,
+            IProductoRepositorio &productoRepositorio);
+
+        // Factura de un pedido recién creado.
+        std::string generar(
+            const Pedido &pedido);
+
+        // Factura de un pedido consultado desde el histórico.
+        std::string generar(
+            const PedidoDetalleVista &pedido);
+    };
 
 }

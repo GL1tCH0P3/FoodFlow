@@ -5,188 +5,288 @@
 #include <iomanip>
 #include <stdexcept>
 
-namespace foodflow {
+namespace foodflow
+{
 
-FacturaCsvServicio::FacturaCsvServicio(
-    ClienteRepositorio& clienteRepositorio,
-    RestauranteRepositorio& restauranteRepositorio,
-    IProductoRepositorio& productoRepositorio
-)
-    : clienteRepositorio(clienteRepositorio),
-      restauranteRepositorio(restauranteRepositorio),
-      productoRepositorio(productoRepositorio) {
-}
-
-
-std::string FacturaCsvServicio::escaparCsv(
-    const std::string& valor
-) const {
-
-    std::string resultado = valor;
-
-    std::size_t posicion = 0;
-
-    while (
-        (posicion = resultado.find('"', posicion))
-        != std::string::npos
-    ) {
-        resultado.insert(posicion, "\"");
-
-        posicion += 2;
+    FacturaCsvServicio::FacturaCsvServicio(
+        ClienteRepositorio &clienteRepositorio,
+        RestauranteRepositorio &restauranteRepositorio,
+        IProductoRepositorio &productoRepositorio)
+        : clienteRepositorio(clienteRepositorio),
+          restauranteRepositorio(restauranteRepositorio),
+          productoRepositorio(productoRepositorio)
+    {
     }
 
-    return "\"" + resultado + "\"";
-}
+    std::string FacturaCsvServicio::escaparCsv(
+        const std::string &valor) const
+    {
 
+        std::string resultado = valor;
 
-std::string FacturaCsvServicio::generar(
-    const Pedido& pedido
-) {
+        std::size_t posicion = 0;
 
-    if (pedido.resultadoValidacion != "CONFIRMADO") {
-        throw std::runtime_error(
-            "Solo se generan facturas para pedidos confirmados."
-        );
+        while (
+            (posicion = resultado.find('"', posicion)) != std::string::npos)
+        {
+            resultado.insert(posicion, "\"");
+
+            posicion += 2;
+        }
+
+        return "\"" + resultado + "\"";
     }
 
+    std::string FacturaCsvServicio::generar(
+        const Pedido &pedido)
+    {
 
-    auto cliente =
-        clienteRepositorio.buscarPorId(
-            pedido.clienteId
-        );
+        if (pedido.resultadoValidacion != "CONFIRMADO")
+        {
+            throw std::runtime_error(
+                "Solo se generan facturas para pedidos confirmados.");
+        }
 
-    if (!cliente.has_value()) {
-        throw std::runtime_error(
-            "No fue posible obtener el cliente de la factura."
-        );
-    }
+        auto cliente =
+            clienteRepositorio.buscarPorId(
+                pedido.clienteId);
 
+        if (!cliente.has_value())
+        {
+            throw std::runtime_error(
+                "No fue posible obtener el cliente de la factura.");
+        }
 
-    auto restaurante =
-        restauranteRepositorio.buscarPorId(
-            pedido.restauranteId
-        );
+        auto restaurante =
+            restauranteRepositorio.buscarPorId(
+                pedido.restauranteId);
 
-    if (!restaurante.has_value()) {
-        throw std::runtime_error(
-            "No fue posible obtener el restaurante de la factura."
-        );
-    }
+        if (!restaurante.has_value())
+        {
+            throw std::runtime_error(
+                "No fue posible obtener el restaurante de la factura.");
+        }
 
+        std::filesystem::create_directories(
+            "facturas");
 
-    std::filesystem::create_directories(
-        "facturas"
-    );
+        const std::string ruta =
+            "facturas/pedido_" + std::to_string(pedido.id) + ".csv";
 
+        std::ofstream archivo(
+            ruta,
+            std::ios::binary);
 
-    const std::string ruta =
-        "facturas/pedido_"
-        + std::to_string(pedido.id)
-        + ".csv";
+        if (!archivo.is_open())
+        {
+            throw std::runtime_error(
+                "No fue posible crear la factura CSV.");
+        }
 
-
-    std::ofstream archivo(
-        ruta,
-        std::ios::binary
-    );
-
-
-    if (!archivo.is_open()) {
-        throw std::runtime_error(
-            "No fue posible crear la factura CSV."
-        );
-    }
-
-
-    // BOM UTF-8 para Excel
-    archivo << "\xEF\xBB\xBF";
-
-
-    archivo
-        << "FOODFLOW - FACTURA\n\n"
-
-        << "Pedido;"
-        << pedido.id
-        << "\n"
-
-        << "Cliente;"
-        << escaparCsv(cliente->nombre)
-        << "\n"
-
-        << "Restaurante;"
-        << escaparCsv(restaurante->nombre)
-        << "\n"
-
-        << "Direccion entrega;"
-        << escaparCsv(pedido.direccionEntrega)
-        << "\n"
-
-        << "Metodo de pago;"
-        << escaparCsv(pedido.metodoPago)
-        << "\n"
-
-        << "Estado;"
-        << pedido.estado.value_or("Sin estado")
-        << "\n\n";
-
-
-    archivo
-        << "Producto ID;"
-        << "Producto;"
-        << "Cantidad;"
-        << "Precio unitario;"
-        << "Subtotal\n";
-
-
-    for (const auto& detalle : pedido.detalles) {
-
-        auto producto =
-            productoRepositorio.buscarPorId(
-                detalle.productoId,
-                pedido.restauranteId
-            );
-
-
-        std::string nombreProducto =
-            producto
-                ? producto->getNombre()
-                : "Producto no disponible";
-
+        // BOM UTF-8 para Excel
+        archivo << "\xEF\xBB\xBF";
 
         archivo
-            << detalle.productoId
-            << ";"
-            << escaparCsv(nombreProducto)
-            << ";"
-            << detalle.cantidad
-            << ";"
-            << std::fixed
-            << std::setprecision(2)
-            << detalle.precioUnitario
-            << ";"
-            << detalle.subtotal
+            << "FOODFLOW - FACTURA\n\n"
+
+            << "Pedido;"
+            << pedido.id
+            << "\n"
+
+            << "Cliente;"
+            << escaparCsv(cliente->nombre)
+            << "\n"
+
+            << "Restaurante;"
+            << escaparCsv(restaurante->nombre)
+            << "\n"
+
+            << "Direccion entrega;"
+            << escaparCsv(pedido.direccionEntrega)
+            << "\n"
+
+            << "Metodo de pago;"
+            << escaparCsv(pedido.metodoPago)
+            << "\n"
+
+            << "Estado;"
+            << pedido.estado.value_or("Sin estado")
+            << "\n\n";
+
+        archivo
+            << "Producto ID;"
+            << "Producto;"
+            << "Cantidad;"
+            << "Precio unitario;"
+            << "Subtotal\n";
+
+        for (const auto &detalle : pedido.detalles)
+        {
+
+            auto producto =
+                productoRepositorio.buscarPorId(
+                    detalle.productoId,
+                    pedido.restauranteId);
+
+            std::string nombreProducto =
+                producto
+                    ? producto->getNombre()
+                    : "Producto no disponible";
+
+            archivo
+                << detalle.productoId
+                << ";"
+                << escaparCsv(nombreProducto)
+                << ";"
+                << detalle.cantidad
+                << ";"
+                << std::fixed
+                << std::setprecision(2)
+                << detalle.precioUnitario
+                << ";"
+                << detalle.subtotal
+                << "\n";
+        }
+
+        archivo
+            << "\nSubtotal;"
+            << pedido.subtotal
+            << "\n"
+
+            << "Costo domicilio;"
+            << pedido.costoDomicilio
+            << "\n"
+
+            << "TOTAL;"
+            << pedido.total
             << "\n";
+
+        archivo.close();
+
+        return ruta;
     }
 
+    std::string FacturaCsvServicio::generar(
+        const PedidoDetalleVista &pedido)
+    {
 
-    archivo
-        << "\nSubtotal;"
-        << pedido.subtotal
-        << "\n"
+        if (
+            pedido.resultadoValidacion != "CONFIRMADO")
+        {
 
-        << "Costo domicilio;"
-        << pedido.costoDomicilio
-        << "\n"
+            throw std::runtime_error(
+                "Solo se generan facturas para pedidos confirmados.");
+        }
 
-        << "TOTAL;"
-        << pedido.total
-        << "\n";
+        std::filesystem::create_directories(
+            "facturas");
 
+        const std::string ruta =
+            "facturas/pedido_" + std::to_string(pedido.id) + ".csv";
 
-    archivo.close();
+        std::ofstream archivo(
+            ruta,
+            std::ios::binary);
 
+        if (
+            !archivo.is_open())
+        {
 
-    return ruta;
-}
+            throw std::runtime_error(
+                "No fue posible crear la factura CSV.");
+        }
+
+        // BOM UTF-8 para mejorar compatibilidad con Excel.
+        archivo
+            << "\xEF\xBB\xBF";
+
+        archivo
+            << "FOODFLOW - FACTURA\n\n"
+
+            << "Pedido;"
+            << pedido.id
+            << "\n"
+
+            << "Fecha;"
+            << escaparCsv(
+                   pedido.fecha)
+            << "\n"
+
+            << "Cliente;"
+            << escaparCsv(
+                   pedido.cliente)
+            << "\n"
+
+            << "Restaurante;"
+            << escaparCsv(
+                   pedido.restaurante)
+            << "\n"
+
+            << "Direccion entrega;"
+            << escaparCsv(
+                   pedido.direccionEntrega)
+            << "\n"
+
+            << "Metodo de pago;"
+            << escaparCsv(
+                   pedido.metodoPago)
+            << "\n"
+
+            << "Estado;"
+            << escaparCsv(
+                   pedido.estado)
+            << "\n\n";
+
+        archivo
+            << "Producto ID;"
+            << "Producto;"
+            << "Cantidad;"
+            << "Precio unitario;"
+            << "Subtotal\n";
+
+        for (
+            const auto &producto :
+            pedido.productos)
+        {
+
+            archivo
+                << producto.productoId
+                << ";"
+
+                << escaparCsv(
+                       producto.nombre)
+                << ";"
+
+                << producto.cantidad
+                << ";"
+
+                << std::fixed
+                << std::setprecision(2)
+                << producto.precioUnitario
+                << ";"
+
+                << producto.subtotal
+                << "\n";
+        }
+
+        archivo
+            << "\nSubtotal;"
+            << std::fixed
+            << std::setprecision(2)
+            << pedido.subtotal
+            << "\n"
+
+            << "Costo domicilio;"
+            << pedido.costoDomicilio
+            << "\n"
+
+            << "TOTAL;"
+            << pedido.total
+            << "\n";
+
+        archivo.close();
+
+        return ruta;
+    }
 
 }

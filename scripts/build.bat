@@ -4,17 +4,23 @@ setlocal EnableExtensions EnableDelayedExpansion
 REM ============================================================
 REM FOODFLOW - BUILD
 REM
-REM Responsabilidad:
-REM   - Preparar MSVC x64.
-REM   - Verificar dependencias precompiladas.
-REM   - Localizar todos los .cpp dentro de src.
-REM   - Compilar y enlazar FoodFlow.
-REM   - Generar dist\foodflow.exe.
-REM   - Copiar DLL de runtime.
+REM Compila:
+REM   - Codigo FoodFlow
+REM   - Dear ImGui
+REM   - Backend Win32
+REM   - Backend DirectX 11
+REM
+REM Enlaza:
+REM   - libpqxx
+REM   - libpq
+REM   - DirectX 11
+REM
+REM Genera:
+REM   dist\foodflow.exe
+REM   dist\*.dll
 REM
 REM NO instala dependencias.
 REM NO usa vcpkg.
-REM NO descarga archivos.
 REM ============================================================
 
 cd /d "%~dp0.."
@@ -31,6 +37,9 @@ set "INCLUDE_DIR=!DEPS_DIR!\include"
 set "LIB_DIR=!DEPS_DIR!\lib"
 set "BIN_DIR=!DEPS_DIR!\bin"
 
+set "IMGUI_DIR=!ROOT!\vendor\imgui"
+set "IMGUI_BACKENDS=!IMGUI_DIR!\backends"
+
 
 echo.
 echo ========================================
@@ -43,11 +52,12 @@ REM ============================================================
 REM 1. PREPARAR MSVC
 REM ============================================================
 
-echo [1/6] Preparando compilador C++...
+echo [1/7] Preparando compilador C++...
 
 call "!ROOT!\scripts\msvc_env.bat"
 
 if errorlevel 1 goto ERROR_MSVC
+
 
 echo       Visual Studio:
 echo       !FOODFLOW_VS_PATH!
@@ -60,11 +70,12 @@ echo       MSVC preparado correctamente.
 
 
 REM ============================================================
-REM 2. VERIFICAR DEPENDENCIAS
+REM 2. VERIFICAR DEPENDENCIAS POSTGRESQL
 REM ============================================================
 
 echo.
-echo [2/6] Verificando dependencias...
+echo [2/7] Verificando dependencias PostgreSQL...
+
 
 if not exist "!DEPS_DIR!\" goto ERROR_DEPS
 
@@ -74,99 +85,185 @@ if not exist "!LIB_DIR!\libpq.lib" goto ERROR_LIBPQ
 
 
 REM ------------------------------------------------------------
-REM Localizar biblioteca libpqxx
+REM Buscar biblioteca libpqxx.
+REM
+REM Primero intentamos los nombres habituales.
+REM Si el paquete utiliza otro nombre compatible, usamos fallback.
 REM ------------------------------------------------------------
 
-if not exist "!BUILD_DIR!\" mkdir "!BUILD_DIR!"
-
 set "PQXX_LIB_NAME="
-set "PQXX_LIB_FILE=!BUILD_DIR!\pqxx_lib.txt"
 
-dir /b /a-d "!LIB_DIR!\*pqxx*.lib" > "!PQXX_LIB_FILE!" 2>nul
 
-if exist "!PQXX_LIB_FILE!" set /p PQXX_LIB_NAME=<"!PQXX_LIB_FILE!"
+if exist "!LIB_DIR!\libpqxx.lib" (
+    set "PQXX_LIB_NAME=libpqxx.lib"
+)
 
-del /Q "!PQXX_LIB_FILE!" >nul 2>&1
+
+if not defined PQXX_LIB_NAME (
+    if exist "!LIB_DIR!\pqxx.lib" (
+        set "PQXX_LIB_NAME=pqxx.lib"
+    )
+)
+
+
+if not defined PQXX_LIB_NAME (
+
+    set "PQXX_LIB_FILE=!TEMP!\foodflow_pqxx_lib_!RANDOM!_!RANDOM!.txt"
+
+
+    dir /b /a-d ^
+        "!LIB_DIR!\*pqxx*.lib" ^
+        > "!PQXX_LIB_FILE!" ^
+        2>nul
+
+
+    if exist "!PQXX_LIB_FILE!" (
+        set /p PQXX_LIB_NAME=<"!PQXX_LIB_FILE!"
+    )
+
+
+    del /Q "!PQXX_LIB_FILE!" >nul 2>&1
+)
+
 
 if not defined PQXX_LIB_NAME goto ERROR_PQXX_LIB
 
+
 set "PQXX_LIB=!LIB_DIR!\!PQXX_LIB_NAME!"
 
-if not exist "!PQXX_LIB!" goto ERROR_PQXX_LIB
 
-echo       libpqxx encontrada:
-echo       !PQXX_LIB_NAME!
-echo.
-echo       libpq encontrada:
-echo       libpq.lib
-echo.
-echo       Dependencias correctas.
+echo       libpqxx: !PQXX_LIB_NAME!
+echo       libpq:   libpq.lib
+echo       Dependencias PostgreSQL correctas.
 
 
 REM ============================================================
-REM 3. PREPARAR DIRECTORIOS
+REM 3. VERIFICAR DEAR IMGUI
 REM ============================================================
 
 echo.
-echo [3/6] Preparando directorios...
+echo [3/7] Verificando Dear ImGui...
 
-if not exist "!BUILD_DIR!\" mkdir "!BUILD_DIR!"
 
-if not exist "!DIST_DIR!\" mkdir "!DIST_DIR!"
+if not exist "!IMGUI_DIR!\imgui.h" goto ERROR_IMGUI
 
-echo       Directorios preparados.
+if not exist "!IMGUI_DIR!\imgui.cpp" goto ERROR_IMGUI
+
+if not exist "!IMGUI_DIR!\imgui_draw.cpp" goto ERROR_IMGUI
+
+if not exist "!IMGUI_DIR!\imgui_tables.cpp" goto ERROR_IMGUI
+
+if not exist "!IMGUI_DIR!\imgui_widgets.cpp" goto ERROR_IMGUI
+
+
+if not exist "!IMGUI_BACKENDS!\imgui_impl_win32.cpp" goto ERROR_IMGUI
+
+if not exist "!IMGUI_BACKENDS!\imgui_impl_win32.h" goto ERROR_IMGUI
+
+
+if not exist "!IMGUI_BACKENDS!\imgui_impl_dx11.cpp" goto ERROR_IMGUI
+
+if not exist "!IMGUI_BACKENDS!\imgui_impl_dx11.h" goto ERROR_IMGUI
+
+
+echo       Dear ImGui encontrado.
+echo       Backend Win32 encontrado.
+echo       Backend DirectX 11 encontrado.
 
 
 REM ============================================================
-REM 4. LOCALIZAR ARCHIVOS FUENTE
+REM 4. PREPARAR BUILD
+REM
+REM Se limpia build para evitar objetos antiguos.
+REM dist NO se elimina hasta que la compilacion termine bien.
 REM ============================================================
 
 echo.
-echo [4/6] Buscando archivos fuente...
+echo [4/7] Preparando directorio de compilacion...
+
+
+if exist "!BUILD_DIR!\" (
+    rmdir /S /Q "!BUILD_DIR!"
+)
+
+
+if exist "!BUILD_DIR!\" goto ERROR_CLEAN_BUILD
+
+
+mkdir "!BUILD_DIR!"
+
+
+if errorlevel 1 goto ERROR_BUILD_DIR
+
+
+echo       Build limpio preparado.
+
+
+REM ============================================================
+REM 5. PREPARAR FUENTES
+REM ============================================================
+
+echo.
+echo [5/7] Buscando archivos fuente...
+
 
 if not exist "!SRC_DIR!\" goto ERROR_SRC_DIR
 
-set "SOURCES_RSP=!BUILD_DIR!\sources.rsp"
 
-if exist "!SOURCES_RSP!" del /Q "!SOURCES_RSP!"
+set "SOURCES_RSP=!BUILD_DIR!\sources.rsp"
 
 
 REM ------------------------------------------------------------
-REM PowerShell se encarga de recorrer src recursivamente.
-REM
-REM Se utilizan variables de entorno para evitar problemas
-REM de quoting con rutas que contienen espacios.
+REM Fuentes propias de FoodFlow
 REM ------------------------------------------------------------
 
 set "FOODFLOW_SRC_DIR=!SRC_DIR!"
+
 set "FOODFLOW_SOURCES_RSP=!SOURCES_RSP!"
+
 
 powershell.exe ^
     -NoProfile ^
     -ExecutionPolicy Bypass ^
     -Command ^
-    "$files = @(Get-ChildItem -LiteralPath $env:FOODFLOW_SRC_DIR -Recurse -File -Filter '*.cpp' -ErrorAction Stop); if ($files.Count -eq 0) { exit 2 }; $lines = $files | ForEach-Object { '\"' + $_.FullName + '\"' }; Set-Content -LiteralPath $env:FOODFLOW_SOURCES_RSP -Value $lines -Encoding ASCII; Write-Host ('      ' + $files.Count + ' archivo(s) .cpp encontrado(s).')" 
+    "$files = @(Get-ChildItem -LiteralPath $env:FOODFLOW_SRC_DIR -Recurse -File -Filter '*.cpp' -ErrorAction Stop); if ($files.Count -eq 0) { exit 2 }; $files | ForEach-Object { '\"' + $_.FullName + '\"' } | Set-Content -LiteralPath $env:FOODFLOW_SOURCES_RSP -Encoding ASCII; Write-Host ('      ' + $files.Count + ' archivo(s) FoodFlow encontrado(s).')"
+
 
 if errorlevel 1 goto ERROR_SOURCES
 
-if not exist "!SOURCES_RSP!" goto ERROR_SOURCES
 
-for %%A in ("!SOURCES_RSP!") do set "SOURCES_SIZE=%%~zA"
+REM ------------------------------------------------------------
+REM Fuentes Dear ImGui
+REM ------------------------------------------------------------
 
-if "!SOURCES_SIZE!"=="0" goto ERROR_SOURCES
+>>"!SOURCES_RSP!" echo "!IMGUI_DIR!\imgui.cpp"
 
+>>"!SOURCES_RSP!" echo "!IMGUI_DIR!\imgui_draw.cpp"
+
+>>"!SOURCES_RSP!" echo "!IMGUI_DIR!\imgui_tables.cpp"
+
+>>"!SOURCES_RSP!" echo "!IMGUI_DIR!\imgui_widgets.cpp"
+
+>>"!SOURCES_RSP!" echo "!IMGUI_BACKENDS!\imgui_impl_win32.cpp"
+
+>>"!SOURCES_RSP!" echo "!IMGUI_BACKENDS!\imgui_impl_dx11.cpp"
+
+
+echo       6 archivo(s) Dear ImGui agregados.
 echo       Lista de fuentes preparada correctamente.
 
 
 REM ============================================================
-REM 5. COMPILAR Y ENLAZAR
+REM 6. COMPILAR Y ENLAZAR
 REM ============================================================
 
 echo.
-echo [5/6] Compilando FoodFlow...
+echo [6/7] Compilando FoodFlow GUI...
 echo.
 
+
 pushd "!BUILD_DIR!"
+
 
 "!FOODFLOW_CL!" ^
     /nologo ^
@@ -175,36 +272,62 @@ pushd "!BUILD_DIR!"
     /W4 ^
     /MD ^
     /utf-8 ^
+    /DUNICODE ^
+    /D_UNICODE ^
     /I"!SRC_DIR!" ^
     /I"!INCLUDE_DIR!" ^
+    /I"!IMGUI_DIR!" ^
+    /I"!IMGUI_BACKENDS!" ^
     @"!SOURCES_RSP!" ^
     /Fe:"foodflow.exe" ^
     /link ^
     /LIBPATH:"!LIB_DIR!" ^
     "!PQXX_LIB!" ^
-    "!LIB_DIR!\libpq.lib"
+    "!LIB_DIR!\libpq.lib" ^
+    d3d11.lib ^
+    dxgi.lib ^
+    d3dcompiler.lib
+
 
 set "BUILD_RESULT=!ERRORLEVEL!"
 
+
 popd
+
 
 if not "!BUILD_RESULT!"=="0" goto ERROR_BUILD
 
 
+if not exist "!BUILD_DIR!\foodflow.exe" goto ERROR_BUILD_EXE
+
+
 REM ============================================================
-REM 6. PREPARAR DISTRIBUCION
+REM 7. PREPARAR DISTRIBUCION
+REM
+REM dist se reconstruye completamente para garantizar que
+REM foodflow.exe y sus DLL pertenezcan al mismo build.
 REM ============================================================
 
 echo.
-echo [6/6] Preparando distribucion...
+echo [7/7] Preparando distribucion...
 
-if exist "!DIST_DIR!\foodflow.exe" del /Q "!DIST_DIR!\foodflow.exe"
 
-del /Q "!DIST_DIR!\*.dll" >nul 2>&1
+if exist "!DIST_DIR!\" (
+    rmdir /S /Q "!DIST_DIR!"
+)
+
+
+if exist "!DIST_DIR!\" goto ERROR_CLEAN_DIST
+
+
+mkdir "!DIST_DIR!"
+
+
+if errorlevel 1 goto ERROR_DIST_DIR
 
 
 REM ------------------------------------------------------------
-REM Copiar ejecutable
+REM Ejecutable
 REM ------------------------------------------------------------
 
 copy /Y ^
@@ -212,26 +335,55 @@ copy /Y ^
     "!DIST_DIR!\foodflow.exe" ^
     >nul
 
+
 if errorlevel 1 goto ERROR_COPY_EXE
 
 
 REM ------------------------------------------------------------
-REM Copiar DLL de runtime
+REM DLL runtime PostgreSQL / libpqxx y dependencias asociadas.
+REM
+REM Copiamos TODAS las DLL de x64-windows\bin.
+REM De esta forma no dependemos del PATH de la maquina.
 REM ------------------------------------------------------------
 
-if not exist "!BIN_DIR!\" goto RUNTIME_READY
-
-copy /Y ^
-    "!BIN_DIR!\*.dll" ^
-    "!DIST_DIR!\" ^
-    >nul 2>&1
+set /A RUNTIME_DLL_COUNT=0
 
 
-:RUNTIME_READY
+if exist "!BIN_DIR!\" (
+
+    for %%F in ("!BIN_DIR!\*.dll") do (
+
+        if exist "%%~fF" (
+
+            copy /Y ^
+                "%%~fF" ^
+                "!DIST_DIR!\" ^
+                >nul
+
+
+            if errorlevel 1 goto ERROR_COPY_DLL
+
+
+            set /A RUNTIME_DLL_COUNT+=1
+        )
+    )
+)
+
+
+echo       Ejecutable preparado.
+
+echo       DLL runtime copiadas: !RUNTIME_DLL_COUNT!
+
+
+if exist "!BIN_DIR!\libpq.dll" (
+
+    if not exist "!DIST_DIR!\libpq.dll" goto ERROR_COPY_DLL
+)
+
 
 echo.
 echo ========================================
-echo FOODFLOW COMPILADO CORRECTAMENTE
+echo FOODFLOW GUI COMPILADO CORRECTAMENTE
 echo ========================================
 echo.
 echo Toolset:
@@ -240,8 +392,17 @@ echo.
 echo Arquitectura:
 echo   x64
 echo.
+echo Estandar:
+echo   C++17
+echo.
+echo GUI:
+echo   Dear ImGui + Win32 + DirectX 11
+echo.
 echo Ejecutable:
 echo   !DIST_DIR!\foodflow.exe
+echo.
+echo Runtime:
+echo   !RUNTIME_DLL_COUNT! DLL(s) copiadas a dist
 echo.
 
 exit /b 0
@@ -268,11 +429,7 @@ echo ========================================
 echo ERROR: Dependencias no preparadas
 echo ========================================
 echo.
-echo No existe:
-echo.
-echo !DEPS_DIR!
-echo.
-echo Ejecute:
+echo Ejecute primero:
 echo.
 echo   scripts\setup.bat
 echo.
@@ -286,10 +443,6 @@ echo ========================================
 echo ERROR: Headers libpqxx no encontrados
 echo ========================================
 echo.
-echo Ruta esperada:
-echo.
-echo !INCLUDE_DIR!\pqxx
-echo.
 exit /b 1
 
 
@@ -299,10 +452,6 @@ echo.
 echo ========================================
 echo ERROR: libpq.lib no encontrada
 echo ========================================
-echo.
-echo Ruta esperada:
-echo.
-echo !LIB_DIR!\libpq.lib
 echo.
 exit /b 1
 
@@ -314,9 +463,44 @@ echo ========================================
 echo ERROR: Biblioteca libpqxx no encontrada
 echo ========================================
 echo.
-echo Directorio:
+exit /b 1
+
+
+:ERROR_IMGUI
+
 echo.
-echo !LIB_DIR!
+echo ========================================
+echo ERROR: Dear ImGui incompleto
+echo ========================================
+echo.
+echo Directorio esperado:
+echo.
+echo   !IMGUI_DIR!
+echo.
+exit /b 1
+
+
+:ERROR_CLEAN_BUILD
+
+echo.
+echo ========================================
+echo ERROR: No fue posible limpiar build
+echo ========================================
+echo.
+echo Verifique que ningun proceso este usando
+echo archivos dentro de:
+echo.
+echo   !BUILD_DIR!
+echo.
+exit /b 1
+
+
+:ERROR_BUILD_DIR
+
+echo.
+echo ========================================
+echo ERROR: No fue posible crear build
+echo ========================================
 echo.
 exit /b 1
 
@@ -328,10 +512,6 @@ echo ========================================
 echo ERROR: Directorio src no encontrado
 echo ========================================
 echo.
-echo Ruta esperada:
-echo.
-echo !SRC_DIR!
-echo.
 exit /b 1
 
 
@@ -339,16 +519,8 @@ exit /b 1
 
 echo.
 echo ========================================
-echo ERROR: No se encontraron archivos .cpp
+echo ERROR: No se encontraron fuentes FoodFlow
 echo ========================================
-echo.
-echo Directorio revisado:
-echo.
-echo !SRC_DIR!
-echo.
-echo Verifique manualmente con:
-echo.
-echo   Get-ChildItem ".\src" -Recurse -File -Filter *.cpp
 echo.
 exit /b 1
 
@@ -363,13 +535,58 @@ echo.
 exit /b !BUILD_RESULT!
 
 
+:ERROR_BUILD_EXE
+
+echo.
+echo ========================================
+echo ERROR: Ejecutable no generado
+echo ========================================
+echo.
+echo No se encontro:
+echo.
+echo   !BUILD_DIR!\foodflow.exe
+echo.
+exit /b 1
+
+
+:ERROR_CLEAN_DIST
+
+echo.
+echo ========================================
+echo ERROR: No fue posible limpiar dist
+echo ========================================
+echo.
+echo Cierre FoodFlow si se encuentra abierto
+echo y vuelva a compilar.
+echo.
+exit /b 1
+
+
+:ERROR_DIST_DIR
+
+echo.
+echo ========================================
+echo ERROR: No fue posible crear dist
+echo ========================================
+echo.
+exit /b 1
+
+
 :ERROR_COPY_EXE
 
 echo.
 echo ========================================
-echo ERROR: No fue posible preparar dist
+echo ERROR: No fue posible copiar foodflow.exe
 echo ========================================
 echo.
-echo No se pudo copiar foodflow.exe.
+exit /b 1
+
+
+:ERROR_COPY_DLL
+
+echo.
+echo ========================================
+echo ERROR: No fue posible preparar las DLL
+echo ========================================
 echo.
 exit /b 1
